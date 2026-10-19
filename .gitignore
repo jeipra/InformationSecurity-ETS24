@@ -1,0 +1,14 @@
+# virtual environment & cache
+.venv/
+__pycache__/
+
+# data terenkripsi dan database (berisi data user)
+storage/
+tmp/
+oprec.db
+
+# cookie hasil tes curl (berisi sesi login)
+cookie*.txt
+
+# file tes
+hasil_*.mp4
