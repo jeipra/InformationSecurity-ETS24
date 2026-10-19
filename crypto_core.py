@@ -1,7 +1,4 @@
 """
-crypto_core.py  --  Orang 1: Cryptography Engineer (Core Logic)
-OPREC Committee Registration Portal
-
 Features
   * AES-256, DES, RC4 encrypt/decrypt as modular functions
   * Block-cipher modes: CFB (8-bit segments) and OFB  -> no padding needed
