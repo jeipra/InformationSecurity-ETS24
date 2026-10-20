@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OPREC Portal</title>
+  <meta name="description" content="Committee open recruitment portal. Your application is encrypted before it is stored.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f3fd1'/%3E%3Cpath d='M9 9h14v14H9z' fill='none' stroke='white' stroke-width='2.5'/%3E%3Cpath d='M9 16h7v7' fill='none' stroke='%23ffb020' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<!--AUTH-->
+<div id="view-auth" class="auth" hidden>
+  <aside class="auth-art" aria-hidden="true">
+    <div class="brand brand-on-art">
+      <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="6" fill="#fff"/><path d="M9 9h14v14H9z" fill="none" stroke="#1f3fd1" stroke-width="2.5"/><path d="M9 16h7v7" fill="none" stroke="#e08a00" stroke-width="2.5"/></svg>
+      <span>oprec</span>
+    </div>
+
+    <svg class="seal-diagram" viewBox="0 0 560 440" role="img" aria-label="One file is encrypted into three copies: AES, DES and RC4">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M1 1L9 5L1 9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        </marker>
+      </defs>
+      <!--source file-->
+      <g class="d-line" transform="translate(30 150)">
+        <path d="M0 0h62l22 22v96H0z" fill="rgba(255,255,255,.06)"/>
+        <path d="M62 0v22h22"/>
+        <path d="M16 54h52M16 70h52M16 86h34" />
+      </g>
+      <text class="d-text" x="72" y="302" text-anchor="middle">your file</text>
+
+      <!--routes-->
+      <g class="d-line d-route">
+        <path d="M114 210H200V78H318" marker-end="url(#arr)"/>
+        <path d="M114 210H318" marker-end="url(#arr)"/>
+        <path d="M114 210H200V342H318" marker-end="url(#arr)"/>
+      </g>
+      <circle class="d-dot" cx="200" cy="210" r="4"/>
+      <text class="d-text d-small" x="206" y="196">your password</text>
+
+      <!-- sealed copies -->
+      <g class="d-box" transform="translate(320 36)">
+        <rect width="210" height="84" rx="6"/>
+        <text class="d-title" x="18" y="38">AES-256</text>
+        <text class="d-text" x="18" y="62">OFB mode, random IV</text>
+        <path class="d-lock" d="M176 36v-6a9 9 0 0 1 18 0v6m-22 0h26v20h-26z"/>
+      </g>
+      <g class="d-box" transform="translate(320 168)">
+        <rect width="210" height="84" rx="6"/>
+        <text class="d-title" x="18" y="38">DES</text>
+        <text class="d-text" x="18" y="62">OFB mode, random IV</text>
+        <path class="d-lock" d="M176 36v-6a9 9 0 0 1 18 0v6m-22 0h26v20h-26z"/>
+      </g>
+      <g class="d-box" transform="translate(320 300)">
+        <rect width="210" height="84" rx="6"/>
+        <text class="d-title" x="18" y="38">RC4</text>
+        <text class="d-text" x="18" y="62">stream, no mode</text>
+        <path class="d-lock" d="M176 36v-6a9 9 0 0 1 18 0v6m-22 0h26v20h-26z"/>
+      </g>
+
+      <!--dimension line-->
+      <g class="d-line d-dim">
+        <path d="M30 418h500" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <path d="M30 410v16M530 410v16"/>
+      </g>
+      <text class="d-text d-small" x="280" y="406" text-anchor="middle">encrypted before it is saved</text>
+    </svg>
+
+    <div class="art-copy">
+      <h2>Sealed before it is saved.</h2>
+      <p>Your details, ID card, documents and video are encrypted with a key made from your password, three different ways. Only your password opens them.</p>
+    </div>
+  </aside>
+
+  <main class="auth-panel" id="main">
+    <div class="brand brand-on-panel">
+      <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="6" fill="#1f3fd1"/><path d="M9 9h14v14H9z" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M9 16h7v7" fill="none" stroke="#ffb020" stroke-width="2.5"/></svg>
+      <span>oprec</span>
+    </div>
+
+    <div class="auth-card">
+      <h1 id="auth-title">Sign in</h1>
+      <p class="muted" id="auth-sub">Continue your committee application.</p>
+
+      <div class="seg" role="tablist" aria-label="Sign in or create an account">
+        <button type="button" role="tab" id="tab-login" aria-selected="true" aria-controls="auth-form">Sign in</button>
+        <button type="button" role="tab" id="tab-register" aria-selected="false" aria-controls="auth-form">Create account</button>
+      </div>
+
+      <form id="auth-form" novalidate autocomplete="on">
+        <div class="field">
+          <label for="a-username">Username</label>
+          <input id="a-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required>
+          <p class="field-error" id="a-username-err" role="alert"></p>
+        </div>
+
+        <div class="field">
+          <label for="a-password">Password</label>
+          <div class="input-wrap">
+            <input id="a-password" name="password" type="password" autocomplete="current-password" maxlength="128" required aria-describedby="a-password-hint">
+            <button type="button" class="ghost-btn" id="toggle-pw" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+          <p class="hint" id="a-password-hint" hidden></p>
+          <p class="field-error" id="a-password-err" role="alert"></p>
+        </div>
+
+        <div class="field" id="confirm-field" hidden>
+          <label for="a-confirm">Confirm password</label>
+          <input id="a-confirm" name="confirm" type="password" autocomplete="new-password" maxlength="128">
+          <p class="field-error" id="a-confirm-err" role="alert"></p>
+        </div>
+
+        <div class="notice notice-warn" id="register-notice" hidden>
+          <strong>There is no password reset.</strong>
+          Your password is what encrypts your files. If you forget it, nobody can recover them.
+        </div>
+
+        <p class="form-error" id="auth-error" role="alert"></p>
+        <button class="btn btn-primary btn-block" id="auth-submit" type="submit">Sign in</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<!--MAIN APP-->
+<div id="view-main" hidden>
+  <header class="topbar">
+    <div class="topbar-in">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="6" fill="#1f3fd1"/><path d="M9 9h14v14H9z" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M9 16h7v7" fill="none" stroke="#ffb020" stroke-width="2.5"/></svg>
+        <span>oprec</span>
+      </div>
+
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="nav-submit" aria-selected="true" aria-controls="panel-submit">Submit</button>
+        <button type="button" role="tab" id="nav-vault" aria-selected="false" aria-controls="panel-vault">My vault <span class="count" id="vault-count">0</span></button>
+      </nav>
+
+      <div class="who">
+        <button type="button" class="lock-chip" id="lock-chip" aria-live="polite">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path id="lock-shackle" d="M6 9V6.5a4 4 0 0 1 8 0V9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="4" y="9" width="12" height="8" rx="1.6" fill="currentColor"/></svg>
+          <span id="lock-text">Locked</span>
+        </button>
+        <span class="username" id="whoami"></span>
+        <button type="button" class="btn btn-quiet" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-app" class="page">
+
+    <!--SUBMIT-->
+    <section id="panel-submit" role="tabpanel" aria-labelledby="nav-submit">
+      <div class="page-head">
+        <h1>Your application</h1>
+        <p class="muted">Add your details and files. Each one is encrypted as soon as it arrives, and you can submit them in any order.</p>
+      </div>
+
+      <form class="card" id="profile-form" novalidate>
+        <div class="card-head">
+          <h2>Personal data</h2>
+          <p class="muted">Used by the committee to screen applicants and plan logistics on event day. Stored encrypted.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="p-nama">Full name</label>
+            <input id="p-nama" name="nama_lengkap" type="text" autocomplete="name" maxlength="100" required>
+            <p class="field-error" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="p-nrp">Student ID (NRP)</label>
+            <input id="p-nrp" name="nrp" type="text" inputmode="numeric" autocomplete="off" placeholder="5025241204" required>
+            <p class="field-error" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="p-hp">Phone number</label>
+            <input id="p-hp" name="no_hp" type="tel" autocomplete="tel" maxlength="20" placeholder="081234567890">
+            <p class="hint">Optional. Starts with 08 or +62.</p>
+            <p class="field-error" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="p-dom">Domicile</label>
+            <input id="p-dom" name="domisili" type="text" autocomplete="off" maxlength="150" placeholder="Where you live in Surabaya">
+            <p class="hint">Optional.</p>
+            <p class="field-error" role="alert"></p>
+          </div>
+          <div class="field span-2">
+            <label for="p-med">Medical history</label>
+            <textarea id="p-med" name="riwayat_medis" rows="3" maxlength="1000"></textarea>
+            <p class="hint">Optional. Allergies, conditions or medication the logistics team should know about.</p>
+            <p class="field-error" role="alert"></p>
+          </div>
+        </div>
+
+        <div class="card-foot">
+          <p class="muted small" id="profile-note">Saving again adds a new encrypted record. It does not replace the old one.</p>
+          <button class="btn btn-primary" type="submit" id="profile-submit">Save and encrypt</button>
+        </div>
+      </form>
+
+      <div class="uploads" id="uploads"></div>
+    </section>
+
+    <!--VAULT-->
+    <section id="panel-vault" role="tabpanel" aria-labelledby="nav-vault" hidden>
+      <div class="page-head">
+        <h1>My vault</h1>
+        <p class="muted">Every item is stored as three encrypted copies. Pick the cipher you want to decrypt with; you get the same data from each.</p>
+      </div>
+      <div id="vault"></div>
+    </section>
+  </main>
+</div>
+
+<!--DIALOGS-->
+<dialog id="pw-dialog" aria-labelledby="pw-title">
+  <form method="dialog" id="pw-form" novalidate>
+    <h2 id="pw-title">Enter your password</h2>
+    <p class="muted" id="pw-reason">Your password is the key that encrypts and decrypts your data.</p>
+    <div class="field">
+      <label for="pw-input">Password</label>
+      <input id="pw-input" type="password" autocomplete="current-password" maxlength="128">
+      <p class="field-error" id="pw-error" role="alert"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-quiet" id="pw-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary">Continue</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="profile-dialog" aria-labelledby="pd-title">
+  <h2 id="pd-title">Personal data</h2>
+  <p class="muted small" id="pd-meta"></p>
+  <dl class="kv" id="pd-body"></dl>
+  <div class="dialog-actions">
+    <button type="button" class="btn btn-primary" data-close>Close</button>
+  </div>
+</dialog>
+
+<dialog id="preview-dialog" aria-labelledby="pv-title" class="wide">
+  <h2 id="pv-title">ID card</h2>
+  <div class="preview-frame"><img id="pv-img" alt="Decrypted ID card"></div>
+  <div class="dialog-actions">
+    <button type="button" class="btn btn-primary" data-close>Close</button>
+  </div>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
