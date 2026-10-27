@@ -56,3 +56,11 @@ crypto_core.py     AES/DES/RC4 encryption, PBKDF2, HMAC, benchmark()
 db.py              SQLite schema and connection helper
 static/            Frontend: index.html, app.js, style.css
 ```
+
+## AI Tools
+
+Originally, we can't decide what database we should use for how much option they are. AI is used to decide that. Here we could see how it gives many recommendation regarding various database we can use. With each of our debugging process happen on our local we almost opting for `mongoDb` database. The idea is, it's more flexible to use online based database. However in the end we decide to use `sqlite` because of the familiarity of it's query and also already has it's own library on python. 
+
+[Conversation History](https://chatgpt.com/s/t_6ae0ba76ce2081918926f4119c38379a)
+
+<img width="712" height="724" alt="image" src="https://github.com/user-attachments/assets/6e2d1e48-a1bb-47af-af73-4437901f7ea3" />
