@@ -1,10 +1,11 @@
 import os
 import bcrypt
-from flask import Flask, request, session, jsonify, send_file, after_this_request
+from flask import Flask, request, session, jsonify, send_file
 from db import get_conn, init_db
 
 import uuid
 from functools import wraps
+from io import BytesIO
 from werkzeug.utils import secure_filename
 from crypto_core import encrypt_file, decrypt_file
 
@@ -30,6 +31,11 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
 os.makedirs("storage", exist_ok=True)
 os.makedirs("tmp", exist_ok=True)
 init_db()
+
+
+@app.get("/")
+def index():
+    return app.send_static_file("index.html")
 
 
 ALGOS = [("AES", "OFB"), ("DES", "OFB"), ("RC4", "NONE")]
@@ -218,16 +224,15 @@ def download(item_id, algo):
     out_path = os.path.join("tmp", uuid.uuid4().hex)
     try:
         decrypt_file(row["enc_path"], out_path, password)
+        with open(out_path, "rb") as f:
+            data = f.read()
     except ValueError as e:
         return jsonify(error=str(e)), 400
-
-    @after_this_request
-    def cleanup(response):
+    finally:
         if os.path.exists(out_path):
             os.remove(out_path)
-        return response
 
-    return send_file(out_path, as_attachment=True,
+    return send_file(BytesIO(data), as_attachment=True,
                      download_name=row["original_name"])
 
 
@@ -327,5 +332,3 @@ def read_profile(item_id, algo):
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
