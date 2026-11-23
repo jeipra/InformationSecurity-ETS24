@@ -139,6 +139,7 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button type="button" role="tab" id="nav-submit" aria-selected="true" aria-controls="panel-submit">Submit</button>
         <button type="button" role="tab" id="nav-vault" aria-selected="false" aria-controls="panel-vault">My vault <span class="count" id="vault-count">0</span></button>
+        <button type="button" role="tab" id="nav-requests" aria-selected="false" aria-controls="panel-requests">Requests</button>
       </nav>
 
       <div class="who">
@@ -214,6 +215,15 @@
         <p class="muted">Every item is stored as three encrypted copies. Pick the cipher you want to decrypt with; you get the same data from each.</p>
       </div>
       <div id="vault"></div>
+    </section>
+
+    <!--REQUESTS-->
+    <section id="panel-requests" role="tabpanel" aria-labelledby="nav-requests" hidden>
+      <div class="page-head">
+        <h1>Access requests</h1>
+        <p class="muted">Request to see another user's private data, and respond to requests sent to you.</p>
+      </div>
+      <div id="requests"></div>
     </section>
   </main>
 </div>

@@ -123,6 +123,11 @@
     'Data tidak ditemukan': 'That item was not found.',
     'nama_lengkap dan nrp wajib diisi': 'Full name and Student ID are required.',
     'kind (KTM/DOCUMENT/VIDEO) dan file wajib diisi': 'Choose a file to upload.',
+    'owner_id wajib diisi': 'Choose a user first.',
+    'Tidak bisa meminta data sendiri': 'You cannot request your own data.',
+    'User tidak ditemukan': 'That user was not found.',
+    'Permintaan sudah pernah dikirim': 'You already sent a request to this user.',
+    'Permintaan tidak ditemukan atau sudah diproses': 'That request was not found or was already handled.',
   };
 
   class ApiError extends Error {
@@ -303,15 +308,15 @@
   }
 
   function setTab(name) {
-    const isSubmit = name === 'submit';
-    $('#nav-submit').setAttribute('aria-selected', String(isSubmit));
-    $('#nav-vault').setAttribute('aria-selected', String(!isSubmit));
-    $('#panel-submit').hidden = !isSubmit;
-    $('#panel-vault').hidden = isSubmit;
+    ['submit', 'vault', 'requests'].forEach((n) => {
+      $(`#nav-${n}`).setAttribute('aria-selected', String(n === name));
+      $(`#panel-${n}`).hidden = n !== name;
+    });
     window.scrollTo({ top: 0 });
-    if (!isSubmit) refreshItems();
+    if (name === 'vault') refreshItems();
+    if (name === 'requests') refreshRequests();
   }
-  wireTabs([$('#nav-submit'), $('#nav-vault')], (t) => setTab(t.id === 'nav-submit' ? 'submit' : 'vault'));
+  wireTabs([$('#nav-submit'), $('#nav-vault'), $('#nav-requests')], (t) => setTab(t.id.replace('nav-', '')));
 
   //Auth form
   let authMode = 'login';
@@ -661,6 +666,64 @@
     }));
     $('#pd-meta').textContent = `Saved ${formatDate(item.created_at)}. Decrypted with ${algo}.`;
     $('#profile-dialog').showModal();
+  }
+
+  //Access requests
+  async function refreshRequests() {
+    try {
+      const [users, incoming, outgoing] = await Promise.all(
+        ['/users', '/requests/incoming', '/requests/outgoing'].map(async (p) => (await request(p)).json()));
+      renderRequests(users.users, incoming.requests, outgoing.requests);
+    } catch (err) {
+      if (err.sessionExpired) resetSession(err.message);
+      else $('#requests').replaceChildren(el('div', { class: 'empty' }, el('p', { text: err.message }),
+        el('button', { class: 'btn btn-quiet', type: 'button', text: 'Try again', onclick: refreshRequests })));
+    }
+  }
+
+  async function requestAction(path, options, successMsg) {
+    try {
+      await request(path, options);
+      toast(successMsg);
+      refreshRequests();
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  function renderRequests(users, incoming, outgoing) {
+    const sentTo = new Set(outgoing.map((r) => r.owner));
+    const section = (title, empty, rows) => el('section', { class: 'group' },
+      el('h2', { text: title }),
+      rows.length ? el('div', { class: 'items' }, rows) : el('p', { class: 'muted small', text: empty }));
+
+    const userRows = users.map((u) => el('div', { class: 'item' },
+      el('div', { class: 'item-main' }, el('div', { class: 'item-name', text: u.username })),
+      el('button', {
+        type: 'button', class: 'copy-btn', text: sentTo.has(u.username) ? 'Requested' : 'Request access',
+        disabled: sentTo.has(u.username),
+        onclick: () => requestAction('/requests', { method: 'POST', json: { owner_id: u.id } }, `Request sent to ${u.username}.`),
+      })));
+
+    const inRows = incoming.map((r) => el('div', { class: 'item' },
+      el('div', { class: 'item-main' },
+        el('div', { class: 'item-name', text: r.requester }),
+        el('div', { class: 'item-meta', text: `${r.status}, ${formatDate(r.created_at)}` })),
+      r.status === 'pending' ? el('div', { class: 'copies' },
+        el('button', { type: 'button', class: 'copy-btn', text: 'Approve',
+          onclick: () => requestAction(`/requests/${r.id}/approve`, { method: 'POST' }, 'Request approved.') }),
+        el('button', { type: 'button', class: 'copy-btn', text: 'Reject',
+          onclick: () => requestAction(`/requests/${r.id}/reject`, { method: 'POST' }, 'Request rejected.') })) : null));
+
+    const outRows = outgoing.map((r) => el('div', { class: 'item' },
+      el('div', { class: 'item-main' },
+        el('div', { class: 'item-name', text: r.owner }),
+        el('div', { class: 'item-meta', text: `${r.status}, ${formatDate(r.created_at)}` }))));
+
+    $('#requests').replaceChildren(
+      section('Users', 'No other users yet.', userRows),
+      section('Incoming requests', 'No requests sent to you.', inRows),
+      section('My requests', 'You have not requested anything.', outRows));
   }
 
   $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
