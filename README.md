@@ -39,6 +39,20 @@ Results matched what is generally documented: RC4 fastest (lightweight stream ci
 
 **Plain Flask, vanilla JS.** No frontend framework or ORM, since the point of the project is the cryptography, not the stack.
 
+## Assignment 2: Key Management
+
+Progress so far, for the first requirement: *a user can request to see the private data of other users (including the images and documents)*. Access is granted **per user**: one request covers all of the owner's data.
+
+**Done**
+
+- `access_requests` table (`db.py`): `requester_id`, `owner_id`, `status` (`pending` / `approved` / `rejected`) and `created_at`. `UNIQUE (requester_id, owner_id)` prevents duplicate requests.
+- Endpoints (`app.py`), all behind `login_required`:
+  - `GET /users`: other users (id and username only).
+  - `POST /requests`: send a request to a user. Rejected for yourself (400), an unknown user (404) or a duplicate (409).
+  - `GET /requests/incoming` and `GET /requests/outgoing`: requests sent to me and requests I sent, with their status.
+  - `POST /requests/<id>/approve` and `/reject`: only the owner can decide, and only while the request is still `pending`.
+- UI: a new **Requests** tab (`static/index.html`, `static/js/app.js`) with the user list and a Request access button, incoming requests with Approve / Reject, and the status of my own requests.
+
 ## 4. Running it locally
 
 ```bash
@@ -51,9 +65,9 @@ Open `http://localhost:5000/`. `oprec.db`, `storage/` and `tmp/` are created aut
 ## 5. Project structure
 
 ```
-app.py            Flask routes: auth, profile, upload, download
+app.py            Flask routes: auth, profile, upload, download, access requests
 crypto_core.py     AES/DES/RC4 encryption, PBKDF2, HMAC, benchmark()
-db.py              SQLite schema and connection helper
+db.py              SQLite schema (users, items, item_copies, access_requests) and connection helper
 static/            Frontend: index.html, app.js, style.css
 ```
 
