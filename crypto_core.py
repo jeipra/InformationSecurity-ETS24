@@ -18,6 +18,8 @@ import struct
 import time
 
 from Crypto.Cipher import AES, DES, ARC4
+from Crypto.Hash import SHA256
+from Crypto.Protocol.KDF import HKDF
 from Crypto.Random import get_random_bytes
 
 # ----------------------------------------------------------------------
@@ -178,6 +180,90 @@ def decrypt_file(in_path, out_path, password, chunk_size=CHUNK_SIZE):
     if not hmac.compare_digest(mac.digest(), stored_tag):
         os.remove(tmp_path)
         raise ValueError("Wrong password or file was modified/corrupted")
+
+    os.replace(tmp_path, out_path)
+
+
+# ----------------------------------------------------------------------
+# 4b. Sharing with a random symmetric key (Assignment 2, requirement 2)
+# ----------------------------------------------------------------------
+SHARE_KEY_SIZE = 32             # 256-bit key, used with AES-256
+
+
+def generate_symmetric_key():
+    """Return a fresh random 256-bit key from the OS CSPRNG."""
+    return get_random_bytes(SHARE_KEY_SIZE)
+
+
+def derive_keys_from_key(key, salt, key_len):
+    """HKDF-SHA256 split of one random key into (enc_key, mac_key)."""
+    material = HKDF(key, key_len + 32, salt, SHA256)
+    return material[:key_len], material[key_len:]
+
+
+def _check_share_key(key):
+    if not isinstance(key, (bytes, bytearray)) or len(key) != SHARE_KEY_SIZE:
+        raise ValueError(f"Key must be {SHARE_KEY_SIZE} bytes")
+
+
+def encrypt_file_with_key(in_path, out_path, key, algorithm="AES", mode="OFB",
+                          chunk_size=CHUNK_SIZE):
+    """Encrypt in_path -> out_path under a raw symmetric key (no password)."""
+    _check_share_key(key)
+    algorithm = algorithm.upper()
+    mode = _validate(algorithm, mode.upper())
+
+    salt = get_random_bytes(SALT_SIZE)
+    iv = get_random_bytes(IV_SIZE[algorithm]) if IV_SIZE[algorithm] else b""
+    enc_key, mac_key = derive_keys_from_key(key, salt, KEY_SIZE[algorithm])
+
+    cipher = make_cipher(algorithm, mode, enc_key, iv)
+    header = _build_header(algorithm, mode, 0, salt, iv)
+    mac = hmac.new(mac_key, header, hashlib.sha256)
+
+    with open(in_path, "rb") as fin, open(out_path, "wb") as fout:
+        fout.write(header)
+        while True:
+            chunk = fin.read(chunk_size)
+            if not chunk:
+                break
+            encrypted = cipher.encrypt(chunk)
+            mac.update(encrypted)
+            fout.write(encrypted)
+        fout.write(mac.digest())
+
+
+def decrypt_file_with_key(in_path, out_path, key, chunk_size=CHUNK_SIZE):
+    """Decrypt a file made by encrypt_file_with_key(). Same temp-file-then-
+    rename safety as decrypt_file()."""
+    _check_share_key(key)
+    tmp_path = out_path + ".tmp"
+    total_size = os.path.getsize(in_path)
+
+    with open(in_path, "rb") as fin:
+        algorithm, mode, iterations, salt, iv, header = _read_header(fin)
+        if iterations != 0:
+            raise ValueError("This file is password-encrypted, not key-encrypted")
+        enc_key, mac_key = derive_keys_from_key(key, salt, KEY_SIZE[algorithm])
+        cipher = make_cipher(algorithm, mode, enc_key, iv)
+        mac = hmac.new(mac_key, header, hashlib.sha256)
+
+        remaining = total_size - len(header) - TAG_SIZE
+        if remaining < 0:
+            raise ValueError("File is too short / corrupted")
+
+        with open(tmp_path, "wb") as fout:
+            while remaining > 0:
+                chunk = fin.read(min(chunk_size, remaining))
+                remaining -= len(chunk)
+                mac.update(chunk)
+                fout.write(cipher.decrypt(chunk))
+
+        stored_tag = fin.read(TAG_SIZE)
+
+    if not hmac.compare_digest(mac.digest(), stored_tag):
+        os.remove(tmp_path)
+        raise ValueError("Wrong key or file was modified/corrupted")
 
     os.replace(tmp_path, out_path)
 
