@@ -289,3 +289,8 @@ dialog .field { margin-top: 16px; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 10px; }
 }
+
+/*sharing key dialog*/
+.key-box { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; width: 100%; word-break: break-all; }
+#sk-fp { word-break: break-all; margin-top: 6px; }
+dialog .notice { margin-top: 16px; }
