@@ -128,6 +128,7 @@
     'User tidak ditemukan': 'That user was not found.',
     'Permintaan sudah pernah dikirim': 'You already sent a request to this user.',
     'Permintaan tidak ditemukan atau sudah diproses': 'That request was not found or was already handled.',
+    'Belum ada data untuk dibagikan': 'You have no data to share yet. Submit something first.',
   };
 
   class ApiError extends Error {
@@ -691,6 +692,39 @@
     }
   }
 
+  // Approving needs the owner's password (to decrypt their data) and returns
+  // the freshly generated symmetric key, which is shown once.
+  async function approveRequest(r) {
+    try {
+      const out = await withPassword(
+        `Your password decrypts your data so it can be shared with ${r.requester}.`,
+        async (pw) => (await request(`/requests/${r.id}/approve`, { method: 'POST', json: { password: pw } })).json());
+      if (out === CANCELLED) return;
+      showShareKey(r.requester, out);
+      refreshRequests();
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  function showShareKey(requester, out) {
+    $('#sk-intro').textContent =
+      `${out.item_count} item(s) were encrypted with a new random key for ${requester}. ` +
+      'Send this key to them by another channel (email, WhatsApp, etc).';
+    $('#sk-key').value = out.share_key;
+    $('#sk-fp').textContent = `Fingerprint (SHA-256): ${out.key_fingerprint}`;
+    $('#sk-copy').textContent = 'Copy key';
+    $('#key-dialog').showModal();
+  }
+
+  $('#sk-copy').addEventListener('click', async () => {
+    const input = $('#sk-key');
+    try { await navigator.clipboard.writeText(input.value); }
+    catch { input.select(); document.execCommand('copy'); }
+    $('#sk-copy').textContent = 'Copied';
+  });
+  $('#key-dialog').addEventListener('close', () => { $('#sk-key').value = ''; });
+
   function renderRequests(users, incoming, outgoing) {
     const sentTo = new Set(outgoing.map((r) => r.owner));
     const section = (title, empty, rows) => el('section', { class: 'group' },
@@ -711,7 +745,7 @@
         el('div', { class: 'item-meta', text: `${r.status}, ${formatDate(r.created_at)}` })),
       r.status === 'pending' ? el('div', { class: 'copies' },
         el('button', { type: 'button', class: 'copy-btn', text: 'Approve',
-          onclick: () => requestAction(`/requests/${r.id}/approve`, { method: 'POST' }, 'Request approved.') }),
+          onclick: () => approveRequest(r) }),
         el('button', { type: 'button', class: 'copy-btn', text: 'Reject',
           onclick: () => requestAction(`/requests/${r.id}/reject`, { method: 'POST' }, 'Request rejected.') })) : null));
 
