@@ -53,6 +53,16 @@ Progress so far, for the first requirement: *a user can request to see the priva
   - `POST /requests/<id>/approve` and `/reject`: only the owner can decide, and only while the request is still `pending`.
 - UI: a new **Requests** tab (`static/index.html`, `static/js/app.js`) with the user list and a Request access button, incoming requests with Approve / Reject, and the status of my own requests.
 
+Second requirement: *the requested user generates a symmetric key to share the data to the requesting user*.
+
+**Done**
+
+- Approving a request (`POST /requests/<id>/approve`) now needs the owner's password. The server decrypts each of the owner's items (all kinds, including the profile) and re-encrypts one copy per item under a fresh random 256-bit key (`generate_symmetric_key()`, AES-256-OFB, HMAC tag). The requester never needs the owner's password, and the owner's own password-encrypted copies are left unchanged.
+- `crypto_core.py`: `generate_symmetric_key()`, `encrypt_file_with_key()` and `decrypt_file_with_key()`. The raw key is split into a cipher key and a MAC key with HKDF-SHA256.
+- `db.py`: `shares` (one per approved request, holds only the key's SHA-256 fingerprint) and `share_items` (path of each key-encrypted copy).
+- The approve response returns `share_key` (base64) once, with `Cache-Control: no-store`. The UI shows it in a dialog so the owner can send it by email or WhatsApp. The key itself is not written to the database.
+- Rejecting still needs no password.
+
 ## 4. Running it locally
 
 ```bash
