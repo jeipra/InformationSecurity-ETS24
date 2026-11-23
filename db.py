@@ -26,6 +26,16 @@ CREATE TABLE IF NOT EXISTS item_copies (
     enc_path  TEXT NOT NULL,              -- lokasi file .enc di storage/
     UNIQUE (item_id, algorithm)
 );
+
+CREATE TABLE IF NOT EXISTS access_requests (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_id  INTEGER NOT NULL REFERENCES users(id),
+    owner_id      INTEGER NOT NULL REFERENCES users(id),
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','approved','rejected')),
+    created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (requester_id, owner_id)
+);
 """
 
 def get_conn():
@@ -37,6 +47,3 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-
-
-

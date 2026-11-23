@@ -10,20 +10,11 @@ from werkzeug.utils import secure_filename
 from crypto_core import encrypt_file, decrypt_file
 
 import json
+import sqlite3
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ganti-ini-saat-deploy")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -84,20 +75,6 @@ def save_encrypted(user_id, kind, original_name, src_path, password):
             if os.path.exists(p):
                 os.remove(p)
         raise
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -196,9 +173,6 @@ def upload():
 
 
 
-
-
-
 @app.post("/download/<int:item_id>/<algo>")
 @login_required
 def download(item_id, algo):
@@ -237,9 +211,6 @@ def download(item_id, algo):
 
 
 
-
-
-
 PROFILE_FIELDS = ["nama_lengkap", "nrp", "no_hp", "riwayat_medis", "domisili"]
 
 
@@ -267,7 +238,6 @@ def save_profile():
             os.remove(tmp_path)
 
     return jsonify(message="Data pribadi tersimpan terenkripsi", item_id=item_id), 201
-
 
 
 
@@ -322,12 +292,88 @@ def read_profile(item_id, algo):
     return jsonify(profile=profile)
 
 
+@app.get("/users")
+@login_required
+def list_users():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, username FROM users WHERE id != ? ORDER BY username",
+            (session["user_id"],),
+        ).fetchall()
+    return jsonify(users=[dict(r) for r in rows])
 
 
+@app.post("/requests")
+@login_required
+def create_request():
+    data = request.get_json(silent=True) or {}
+    owner_id = data.get("owner_id")
+
+    if not isinstance(owner_id, int) or isinstance(owner_id, bool):
+        return jsonify(error="owner_id wajib diisi"), 400
+    if owner_id == session["user_id"]:
+        return jsonify(error="Tidak bisa meminta data sendiri"), 400
+
+    with get_conn() as conn:
+        owner = conn.execute(
+            "SELECT id FROM users WHERE id = ?", (owner_id,)
+        ).fetchone()
+        if not owner:
+            return jsonify(error="User tidak ditemukan"), 404
+        try:
+            cur = conn.execute(
+                "INSERT INTO access_requests (requester_id, owner_id) VALUES (?, ?)",
+                (session["user_id"], owner_id),
+            )
+        except sqlite3.IntegrityError:
+            return jsonify(error="Permintaan sudah pernah dikirim"), 409
+
+    return jsonify(message="Permintaan terkirim", request_id=cur.lastrowid), 201
 
 
+@app.get("/requests/incoming")
+@login_required
+def incoming_requests():
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.id, r.status, r.created_at, u.username AS requester
+               FROM access_requests r JOIN users u ON u.id = r.requester_id
+               WHERE r.owner_id = ? ORDER BY r.id DESC""",
+            (session["user_id"],),
+        ).fetchall()
+    return jsonify(requests=[dict(r) for r in rows])
 
 
+@app.get("/requests/outgoing")
+@login_required
+def outgoing_requests():
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.id, r.status, r.created_at, u.username AS owner
+               FROM access_requests r JOIN users u ON u.id = r.owner_id
+               WHERE r.requester_id = ? ORDER BY r.id DESC""",
+            (session["user_id"],),
+        ).fetchall()
+    return jsonify(requests=[dict(r) for r in rows])
+
+
+@app.post("/requests/<int:request_id>/<action>")
+@login_required
+def decide_request(request_id, action):
+    if action not in {"approve", "reject"}:
+        return jsonify(error="Aksi harus approve atau reject"), 400
+
+    new_status = "approved" if action == "approve" else "rejected"
+    with get_conn() as conn:
+        cur = conn.execute(
+            """UPDATE access_requests SET status = ?
+               WHERE id = ? AND owner_id = ? AND status = 'pending'""",
+            (new_status, request_id, session["user_id"]),
+        )
+    if cur.rowcount == 0:
+        return jsonify(error="Permintaan tidak ditemukan atau sudah diproses"), 404
+
+    return jsonify(message=f"Permintaan {new_status}")
 
 
 if __name__ == "__main__":
