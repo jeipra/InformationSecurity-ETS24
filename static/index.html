@@ -245,6 +245,21 @@
   </form>
 </dialog>
 
+<dialog id="key-dialog" aria-labelledby="sk-title">
+  <h2 id="sk-title">Sharing key</h2>
+  <p class="muted" id="sk-intro"></p>
+  <div class="field">
+    <label for="sk-key">Symmetric key (AES-256, base64)</label>
+    <input id="sk-key" class="key-box" type="text" readonly spellcheck="false" autocomplete="off">
+    <p class="hint" id="sk-fp"></p>
+  </div>
+  <p class="notice notice-warn">This key is shown only once. Anyone who has it can read the shared data, so send it privately.</p>
+  <div class="dialog-actions">
+    <button type="button" class="btn btn-quiet" id="sk-copy">Copy key</button>
+    <button type="button" class="btn btn-primary" data-close>Done</button>
+  </div>
+</dialog>
+
 <dialog id="profile-dialog" aria-labelledby="pd-title">
   <h2 id="pd-title">Personal data</h2>
   <p class="muted small" id="pd-meta"></p>
