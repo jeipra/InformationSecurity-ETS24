@@ -139,7 +139,6 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button type="button" role="tab" id="nav-submit" aria-selected="true" aria-controls="panel-submit">Submit</button>
         <button type="button" role="tab" id="nav-vault" aria-selected="false" aria-controls="panel-vault">My vault <span class="count" id="vault-count">0</span></button>
-        <button type="button" role="tab" id="nav-requests" aria-selected="false" aria-controls="panel-requests">Requests</button>
       </nav>
 
       <div class="who">
@@ -215,15 +214,43 @@
         <p class="muted">Every item is stored as three encrypted copies. Pick the cipher you want to decrypt with; you get the same data from each.</p>
       </div>
       <div id="vault"></div>
-    </section>
 
-    <!--REQUESTS-->
-    <section id="panel-requests" role="tabpanel" aria-labelledby="nav-requests" hidden>
-      <div class="page-head">
-        <h1>Access requests</h1>
-        <p class="muted">Request to see another user's private data, and respond to requests sent to you.</p>
-      </div>
-      <div id="requests"></div>
+      <section class="card" id="unlock-card">
+        <div class="card-head">
+          <h2>Unlock a shared item</h2>
+          <p class="muted">If someone sent you a wrapped key over email or WhatsApp, decrypt their file here with your private key. You never need their password.</p>
+        </div>
+        <form id="unlock-form" novalidate>
+          <div class="grid-2">
+            <div class="field">
+              <label for="un-item">Item ID</label>
+              <input id="un-item" type="number" min="1" inputmode="numeric">
+            </div>
+            <div class="field">
+              <label for="un-algo">Cipher</label>
+              <select id="un-algo">
+                <option value="AES">AES</option>
+                <option value="DES">DES</option>
+                <option value="RC4">RC4</option>
+              </select>
+            </div>
+            <div class="field span-2">
+              <label for="un-wrapped">Wrapped key (sent to you)</label>
+              <textarea id="un-wrapped" class="pem-box" rows="3"></textarea>
+            </div>
+            <div class="field span-2">
+              <label for="un-private">Your private key</label>
+              <textarea id="un-private" class="pem-box" rows="7" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+              <p class="hint">The key you saved at registration. Sent for this request only, never stored.</p>
+            </div>
+          </div>
+          <p class="field-error" id="un-error" role="alert"></p>
+          <div class="card-foot">
+            <p class="muted small">Decrypting downloads the file directly; nothing is added to your own vault.</p>
+            <button class="btn btn-primary" type="submit" id="un-submit">Decrypt and download</button>
+          </div>
+        </form>
+      </section>
     </section>
   </main>
 </div>
@@ -245,19 +272,55 @@
   </form>
 </dialog>
 
-<dialog id="key-dialog" aria-labelledby="sk-title">
-  <h2 id="sk-title">Sharing key</h2>
-  <p class="muted" id="sk-intro"></p>
+<dialog id="privkey-dialog" aria-labelledby="pk-title">
+  <h2 id="pk-title">Save your private key</h2>
+  <div class="notice notice-warn">
+    <strong>Shown once, never stored.</strong>
+    Other users wrap a shared key with your public key, which is already saved. Only this private key can unlock it, and there is no way to get a copy later if you lose it.
+  </div>
   <div class="field">
-    <label for="sk-key">Symmetric key (AES-256, base64)</label>
-    <input id="sk-key" class="key-box" type="text" readonly spellcheck="false" autocomplete="off">
-    <p class="hint" id="sk-fp"></p>
+    <label for="pk-text">Your RSA private key (PEM)</label>
+    <textarea id="pk-text" class="pem-box" rows="9" readonly></textarea>
   </div>
-  <p class="notice notice-warn">This key is shown only once. Anyone who has it can read the shared data, so send it privately.</p>
   <div class="dialog-actions">
-    <button type="button" class="btn btn-quiet" id="sk-copy">Copy key</button>
-    <button type="button" class="btn btn-primary" data-close>Done</button>
+    <button type="button" class="btn btn-quiet" id="pk-download">Download .pem</button>
+    <button type="button" class="btn btn-primary" id="pk-continue">I've saved it, continue</button>
   </div>
+</dialog>
+
+<dialog id="share-dialog" aria-labelledby="sh-title" class="wide">
+  <form novalidate id="share-form">
+    <h2 id="sh-title">Share a decryption key</h2>
+    <p class="muted small" id="sh-item-label"></p>
+
+    <div class="field">
+      <label for="sh-algo">Cipher copy to share</label>
+      <select id="sh-algo"></select>
+    </div>
+    <div class="field">
+      <label for="sh-recipient">Recipient's username</label>
+      <input id="sh-recipient" type="text" autocomplete="off" maxlength="40">
+    </div>
+    <div class="field">
+      <label for="sh-password">Your password</label>
+      <input id="sh-password" type="password" autocomplete="current-password" maxlength="128">
+      <p class="hint">Used once here to unlock this file's key so it can be wrapped for the recipient with their public key. Not sent to them.</p>
+    </div>
+    <p class="field-error" id="sh-error" role="alert"></p>
+
+    <div id="sh-result" hidden>
+      <p class="hint">Send this, with item ID <strong id="sh-result-id"></strong> and cipher <strong id="sh-result-algo"></strong>, to the recipient over email, WhatsApp, or any channel you already use.</p>
+      <div class="field">
+        <label for="sh-result-text">Wrapped key</label>
+        <textarea id="sh-result-text" class="pem-box" rows="5" readonly></textarea>
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-quiet" data-close>Close</button>
+      <button type="submit" class="btn btn-primary" id="sh-submit">Wrap key for recipient</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="profile-dialog" aria-labelledby="pd-title">
