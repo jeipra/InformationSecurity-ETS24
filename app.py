@@ -1,4 +1,6 @@
 import os
+import base64
+import binascii
 import bcrypt
 from flask import Flask, request, session, jsonify, send_file
 from db import get_conn, init_db
@@ -7,14 +9,26 @@ import uuid
 from functools import wraps
 from io import BytesIO
 from werkzeug.utils import secure_filename
-from crypto_core import encrypt_file, decrypt_file
+from crypto_core import (
+    encrypt_file, decrypt_file, decrypt_file_with_key, get_key_material,
+    generate_rsa_keypair, wrap_key_material, unwrap_key_material,
+)
 
 import json
-import sqlite3
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ganti-ini-saat-deploy")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -78,6 +92,20 @@ def save_encrypted(user_id, kind, original_name, src_path, password):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @app.post("/register")
 def register():
     data = request.get_json(silent=True) or {}
@@ -88,17 +116,21 @@ def register():
         return jsonify(error="Username min 3 karakter, password min 8 karakter"), 400
 
     pw_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    public_pem, private_pem = generate_rsa_keypair()
 
     with get_conn() as conn:
         try:
             conn.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (username, pw_hash),
+                "INSERT INTO users (username, password_hash, public_key) VALUES (?, ?, ?)",
+                (username, pw_hash, public_pem.decode()),
             )
         except Exception:
             return jsonify(error="Username sudah dipakai"), 409
 
-    return jsonify(message="Registrasi berhasil"), 201
+    return jsonify(
+        message="Registrasi berhasil",
+        private_key=private_pem.decode(),
+    ), 201
 
 
 @app.post("/login")
@@ -173,6 +205,9 @@ def upload():
 
 
 
+
+
+
 @app.post("/download/<int:item_id>/<algo>")
 @login_required
 def download(item_id, algo):
@@ -210,6 +245,100 @@ def download(item_id, algo):
                      download_name=row["original_name"])
 
 
+@app.post("/share/<int:item_id>/<algo>")
+@login_required
+def share_key(item_id, algo):
+    """
+    Wrap one item's symmetric key with a recipient's RSA public key, so the
+    owner can hand the result to that user over email, WhatsApp, or any
+    other channel without the password or the key ever travelling in the
+    clear. This does not store or send anything itself: it just produces
+    the ciphertext blob for the owner to copy and deliver by other means.
+    """
+    algo = algo.upper()
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+    recipient = (data.get("recipient") or "").strip()
+
+    if algo not in {"AES", "DES", "RC4"}:
+        return jsonify(error="Algoritma harus AES, DES, atau RC4"), 400
+    if not password_is_valid(session["user_id"], password):
+        return jsonify(error="Password salah"), 401
+    if not recipient:
+        return jsonify(error="Username penerima wajib diisi"), 400
+
+    with get_conn() as conn:
+        item_row = conn.execute(
+            """SELECT c.enc_path
+               FROM items i JOIN item_copies c ON c.item_id = i.id
+               WHERE i.id = ? AND i.user_id = ? AND c.algorithm = ?""",
+            (item_id, session["user_id"], algo),
+        ).fetchone()
+        recipient_row = conn.execute(
+            "SELECT public_key FROM users WHERE username = ?", (recipient,)
+        ).fetchone()
+
+    if not item_row:
+        return jsonify(error="Data tidak ditemukan"), 404
+    if not recipient_row or not recipient_row["public_key"]:
+        return jsonify(error="Penerima tidak ditemukan"), 404
+
+    try:
+        key_material = get_key_material(item_row["enc_path"], password)
+        wrapped = wrap_key_material(key_material, recipient_row["public_key"].encode())
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+
+    return jsonify(wrapped_key=base64.b64encode(wrapped).decode())
+
+
+@app.post("/unlock-shared/<int:item_id>/<algo>")
+@login_required
+def unlock_shared(item_id, algo):
+    """
+    Decrypt an item that belongs to someone else, using a key wrapped for
+    the current user with their RSA public key. The wrapped key and the
+    item id/algorithm are expected to have arrived separately (email, WA),
+    since neither is secret on its own; the private key supplied here is
+    never stored, only used for this one request.
+    """
+    algo = algo.upper()
+    wrapped_b64 = request.form.get("wrapped_key") or ""
+    private_key_pem = request.form.get("private_key") or ""
+
+    if algo not in {"AES", "DES", "RC4"}:
+        return jsonify(error="Algoritma harus AES, DES, atau RC4"), 400
+    if not wrapped_b64 or not private_key_pem:
+        return jsonify(error="Wrapped key dan private key wajib diisi"), 400
+
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT i.original_name, c.enc_path
+               FROM items i JOIN item_copies c ON c.item_id = i.id
+               WHERE i.id = ? AND c.algorithm = ?""",
+            (item_id, algo),
+        ).fetchone()
+    if not row:
+        return jsonify(error="Data tidak ditemukan"), 404
+
+    out_path = os.path.join("tmp", uuid.uuid4().hex)
+    try:
+        wrapped = base64.b64decode(wrapped_b64, validate=True)
+        key_material = unwrap_key_material(wrapped, private_key_pem.encode())
+        decrypt_file_with_key(row["enc_path"], out_path, key_material)
+        with open(out_path, "rb") as f:
+            data = f.read()
+    except (ValueError, binascii.Error):
+        return jsonify(error="Private key salah atau wrapped key rusak"), 400
+    finally:
+        if os.path.exists(out_path):
+            os.remove(out_path)
+
+    return send_file(BytesIO(data), as_attachment=True,
+                     download_name=row["original_name"])
+
+
+
 
 PROFILE_FIELDS = ["nama_lengkap", "nrp", "no_hp", "riwayat_medis", "domisili"]
 
@@ -238,6 +367,7 @@ def save_profile():
             os.remove(tmp_path)
 
     return jsonify(message="Data pribadi tersimpan terenkripsi", item_id=item_id), 201
+
 
 
 
@@ -292,89 +422,15 @@ def read_profile(item_id, algo):
     return jsonify(profile=profile)
 
 
-@app.get("/users")
-@login_required
-def list_users():
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, username FROM users WHERE id != ? ORDER BY username",
-            (session["user_id"],),
-        ).fetchall()
-    return jsonify(users=[dict(r) for r in rows])
 
 
-@app.post("/requests")
-@login_required
-def create_request():
-    data = request.get_json(silent=True) or {}
-    owner_id = data.get("owner_id")
-
-    if not isinstance(owner_id, int) or isinstance(owner_id, bool):
-        return jsonify(error="owner_id wajib diisi"), 400
-    if owner_id == session["user_id"]:
-        return jsonify(error="Tidak bisa meminta data sendiri"), 400
-
-    with get_conn() as conn:
-        owner = conn.execute(
-            "SELECT id FROM users WHERE id = ?", (owner_id,)
-        ).fetchone()
-        if not owner:
-            return jsonify(error="User tidak ditemukan"), 404
-        try:
-            cur = conn.execute(
-                "INSERT INTO access_requests (requester_id, owner_id) VALUES (?, ?)",
-                (session["user_id"], owner_id),
-            )
-        except sqlite3.IntegrityError:
-            return jsonify(error="Permintaan sudah pernah dikirim"), 409
-
-    return jsonify(message="Permintaan terkirim", request_id=cur.lastrowid), 201
 
 
-@app.get("/requests/incoming")
-@login_required
-def incoming_requests():
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT r.id, r.status, r.created_at, u.username AS requester
-               FROM access_requests r JOIN users u ON u.id = r.requester_id
-               WHERE r.owner_id = ? ORDER BY r.id DESC""",
-            (session["user_id"],),
-        ).fetchall()
-    return jsonify(requests=[dict(r) for r in rows])
 
 
-@app.get("/requests/outgoing")
-@login_required
-def outgoing_requests():
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT r.id, r.status, r.created_at, u.username AS owner
-               FROM access_requests r JOIN users u ON u.id = r.owner_id
-               WHERE r.requester_id = ? ORDER BY r.id DESC""",
-            (session["user_id"],),
-        ).fetchall()
-    return jsonify(requests=[dict(r) for r in rows])
-
-
-@app.post("/requests/<int:request_id>/<action>")
-@login_required
-def decide_request(request_id, action):
-    if action not in {"approve", "reject"}:
-        return jsonify(error="Aksi harus approve atau reject"), 400
-
-    new_status = "approved" if action == "approve" else "rejected"
-    with get_conn() as conn:
-        cur = conn.execute(
-            """UPDATE access_requests SET status = ?
-               WHERE id = ? AND owner_id = ? AND status = 'pending'""",
-            (new_status, request_id, session["user_id"]),
-        )
-    if cur.rowcount == 0:
-        return jsonify(error="Permintaan tidak ditemukan atau sudah diproses"), 404
-
-    return jsonify(message=f"Permintaan {new_status}")
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
