@@ -123,12 +123,10 @@
     'Data tidak ditemukan': 'That item was not found.',
     'nama_lengkap dan nrp wajib diisi': 'Full name and Student ID are required.',
     'kind (KTM/DOCUMENT/VIDEO) dan file wajib diisi': 'Choose a file to upload.',
-    'owner_id wajib diisi': 'Choose a user first.',
-    'Tidak bisa meminta data sendiri': 'You cannot request your own data.',
-    'User tidak ditemukan': 'That user was not found.',
-    'Permintaan sudah pernah dikirim': 'You already sent a request to this user.',
-    'Permintaan tidak ditemukan atau sudah diproses': 'That request was not found or was already handled.',
-    'Belum ada data untuk dibagikan': 'You have no data to share yet. Submit something first.',
+    'Username penerima wajib diisi': "Enter the recipient's username.",
+    'Penerima tidak ditemukan': 'That recipient was not found.',
+    'Wrapped key dan private key wajib diisi': 'Fill in both the wrapped key and your private key.',
+    'Private key salah atau wrapped key rusak': 'That private key is wrong, or the wrapped key is corrupted.',
   };
 
   class ApiError extends Error {
@@ -153,6 +151,14 @@
       if ((res.headers.get('content-type') || '').includes('json')) raw = (await res.json()).error || '';
     } catch { /* non-JSON error page (413, 500): fall through */ }
     return new ApiError(res.status, raw);
+  }
+
+  /** Pull the server-supplied filename out of a download response (used for
+     unlocked shared items, where the client never had item.original_name). */
+  function filenameFromResponse(res, fallback) {
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = /filename\*?=(?:UTF-8''|")?([^";]+)"?/.exec(cd);
+    return m ? decodeURIComponent(m[1]) : fallback;
   }
 
   /** fetch wrapper. Returns the Response on 2xx, throws ApiError otherwise. */
@@ -309,15 +315,33 @@
   }
 
   function setTab(name) {
-    ['submit', 'vault', 'requests'].forEach((n) => {
-      $(`#nav-${n}`).setAttribute('aria-selected', String(n === name));
-      $(`#panel-${n}`).hidden = n !== name;
-    });
+    const isSubmit = name === 'submit';
+    $('#nav-submit').setAttribute('aria-selected', String(isSubmit));
+    $('#nav-vault').setAttribute('aria-selected', String(!isSubmit));
+    $('#panel-submit').hidden = !isSubmit;
+    $('#panel-vault').hidden = isSubmit;
     window.scrollTo({ top: 0 });
-    if (name === 'vault') refreshItems();
-    if (name === 'requests') refreshRequests();
+    if (!isSubmit) refreshItems();
   }
-  wireTabs([$('#nav-submit'), $('#nav-vault'), $('#nav-requests')], (t) => setTab(t.id.replace('nav-', '')));
+  wireTabs([$('#nav-submit'), $('#nav-vault')], (t) => setTab(t.id === 'nav-submit' ? 'submit' : 'vault'));
+
+  //Private key (shown once, right after registration)
+  function showPrivateKey(pem, username) {
+    return new Promise((resolve) => {
+      const dlg = $('#privkey-dialog');
+      $('#pk-text').value = pem;
+      $('#pk-download').onclick = () => {
+        const blob = new Blob([pem], { type: 'application/x-pem-file' });
+        const url = URL.createObjectURL(blob);
+        const a = el('a', { href: url, download: `${username}_private_key.pem` });
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      };
+      $('#pk-continue').onclick = () => dlg.close();
+      dlg.addEventListener('close', () => resolve(), { once: true });
+      dlg.showModal();
+    });
+  }
 
   //Auth form
   let authMode = 'login';
@@ -379,7 +403,11 @@
     const label = btn.textContent;
     btn.disabled = true; btn.textContent = reg ? 'Creating account…' : 'Signing in…';
     try {
-      if (reg) await request('/register', { method: 'POST', json: { username, password } });
+      if (reg) {
+        const regRes = await request('/register', { method: 'POST', json: { username, password } });
+        const regBody = await regRes.json();
+        if (regBody.private_key) await showPrivateKey(regBody.private_key, username);
+      }
       await request('/login', { method: 'POST', json: { username, password } });
       state.user = username; state.password = password;
       try { sessionStorage.setItem('oprec_user', username); } catch { /* ignore */ }
@@ -596,6 +624,9 @@
       p.addEventListener('click', () => runCopyAction(p, item, 'AES', 'preview'));
       buttons.push(p);
     }
+    const shareBtn = el('button', { type: 'button', class: 'copy-btn', text: 'Share key', 'aria-label': `Share a decryption key for ${itemLabel(item)}` });
+    shareBtn.addEventListener('click', () => openShareDialog(item));
+    buttons.push(shareBtn);
     return el('div', { class: 'item' },
       el('div', { class: 'item-main' },
         el('div', { class: 'item-name', text: itemLabel(item) }),
@@ -669,103 +700,89 @@
     $('#profile-dialog').showModal();
   }
 
-  //Access requests
-  async function refreshRequests() {
-    try {
-      const [users, incoming, outgoing] = await Promise.all(
-        ['/users', '/requests/incoming', '/requests/outgoing'].map(async (p) => (await request(p)).json()));
-      renderRequests(users.users, incoming.requests, outgoing.requests);
-    } catch (err) {
-      if (err.sessionExpired) resetSession(err.message);
-      else $('#requests').replaceChildren(el('div', { class: 'empty' }, el('p', { text: err.message }),
-        el('button', { class: 'btn btn-quiet', type: 'button', text: 'Try again', onclick: refreshRequests })));
-    }
-  }
-
-  async function requestAction(path, options, successMsg) {
-    try {
-      await request(path, options);
-      toast(successMsg);
-      refreshRequests();
-    } catch (err) {
-      handleError(err);
-    }
-  }
-
-  // Approving needs the owner's password (to decrypt their data) and returns
-  // the freshly generated symmetric key, which is shown once.
-  async function approveRequest(r) {
-    try {
-      const out = await withPassword(
-        `Your password decrypts your data so it can be shared with ${r.requester}.`,
-        async (pw) => (await request(`/requests/${r.id}/approve`, { method: 'POST', json: { password: pw } })).json());
-      if (out === CANCELLED) return;
-      showShareKey(r.requester, out);
-      refreshRequests();
-    } catch (err) {
-      handleError(err);
-    }
-  }
-
-  function showShareKey(requester, out) {
-    $('#sk-intro').textContent =
-      `${out.item_count} item(s) were encrypted with a new random key for ${requester}. ` +
-      'Send this key to them by another channel (email, WhatsApp, etc).';
-    $('#sk-key').value = out.share_key;
-    $('#sk-fp').textContent = `Fingerprint (SHA-256): ${out.key_fingerprint}`;
-    $('#sk-copy').textContent = 'Copy key';
-    $('#key-dialog').showModal();
-  }
-
-  $('#sk-copy').addEventListener('click', async () => {
-    const input = $('#sk-key');
-    try { await navigator.clipboard.writeText(input.value); }
-    catch { input.select(); document.execCommand('copy'); }
-    $('#sk-copy').textContent = 'Copied';
-  });
-  $('#key-dialog').addEventListener('close', () => { $('#sk-key').value = ''; });
-
-  function renderRequests(users, incoming, outgoing) {
-    const sentTo = new Set(outgoing.map((r) => r.owner));
-    const section = (title, empty, rows) => el('section', { class: 'group' },
-      el('h2', { text: title }),
-      rows.length ? el('div', { class: 'items' }, rows) : el('p', { class: 'muted small', text: empty }));
-
-    const userRows = users.map((u) => el('div', { class: 'item' },
-      el('div', { class: 'item-main' }, el('div', { class: 'item-name', text: u.username })),
-      el('button', {
-        type: 'button', class: 'copy-btn', text: sentTo.has(u.username) ? 'Requested' : 'Request access',
-        disabled: sentTo.has(u.username),
-        onclick: () => requestAction('/requests', { method: 'POST', json: { owner_id: u.id } }, `Request sent to ${u.username}.`),
-      })));
-
-    const inRows = incoming.map((r) => el('div', { class: 'item' },
-      el('div', { class: 'item-main' },
-        el('div', { class: 'item-name', text: r.requester }),
-        el('div', { class: 'item-meta', text: `${r.status}, ${formatDate(r.created_at)}` })),
-      r.status === 'pending' ? el('div', { class: 'copies' },
-        el('button', { type: 'button', class: 'copy-btn', text: 'Approve',
-          onclick: () => approveRequest(r) }),
-        el('button', { type: 'button', class: 'copy-btn', text: 'Reject',
-          onclick: () => requestAction(`/requests/${r.id}/reject`, { method: 'POST' }, 'Request rejected.') })) : null));
-
-    const outRows = outgoing.map((r) => el('div', { class: 'item' },
-      el('div', { class: 'item-main' },
-        el('div', { class: 'item-name', text: r.owner }),
-        el('div', { class: 'item-meta', text: `${r.status}, ${formatDate(r.created_at)}` }))));
-
-    $('#requests').replaceChildren(
-      section('Users', 'No other users yet.', userRows),
-      section('Incoming requests', 'No requests sent to you.', inRows),
-      section('My requests', 'You have not requested anything.', outRows));
-  }
-
   $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
   // Close a dialog when the backdrop is clicked.
   ['#profile-dialog', '#preview-dialog'].forEach((sel) => {
     const d = $(sel);
     d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
     d.addEventListener('close', () => { if (sel === '#profile-dialog') $('#pd-body').replaceChildren(); });
+  });
+
+  //Share a decryption key with another user (RSA-wrapped)
+  function openShareDialog(item) {
+    const dlg = $('#share-dialog');
+    dlg.dataset.itemId = item.id;
+    $('#sh-algo').replaceChildren(...algoList(item).map((a) => el('option', { value: a.id, text: `${a.id} ${a.note}` })));
+    $('#sh-item-label').textContent = `${itemLabel(item)} · item ID ${item.id}`;
+    $('#sh-recipient').value = '';
+    $('#sh-password').value = '';
+    $('#sh-error').textContent = '';
+    $('#sh-result').hidden = true;
+    $('#sh-result-text').value = '';
+    dlg.showModal();
+  }
+
+  $('#share-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const dlg = $('#share-dialog');
+    const itemId = dlg.dataset.itemId;
+    const algo = $('#sh-algo').value;
+    const recipient = $('#sh-recipient').value.trim();
+    const password = $('#sh-password').value;
+    $('#sh-error').textContent = '';
+    if (!recipient) { $('#sh-error').textContent = "Enter the recipient's username."; return; }
+    if (!password) { $('#sh-error').textContent = 'Enter your password.'; return; }
+
+    const btn = $('#sh-submit');
+    btn.disabled = true; btn.textContent = 'Wrapping…';
+    try {
+      const res = await request(`/share/${itemId}/${algo}`, { method: 'POST', json: { password, recipient } });
+      const body = await res.json();
+      $('#sh-result-id').textContent = itemId;
+      $('#sh-result-algo').textContent = algo;
+      $('#sh-result-text').value = body.wrapped_key;
+      $('#sh-result').hidden = false;
+      toast(`Key wrapped for ${recipient}.`);
+    } catch (err) {
+      if (err.sessionExpired) { resetSession(err.message); return; }
+      $('#sh-error').textContent = err.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Wrap key for recipient';
+    }
+  });
+
+  //Unlock an item someone else shared with us
+  $('#unlock-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const itemId = $('#un-item').value.trim();
+    const algo = $('#un-algo').value;
+    const wrapped = $('#un-wrapped').value.trim();
+    const priv = $('#un-private').value.trim();
+    $('#un-error').textContent = '';
+    if (!itemId) { $('#un-error').textContent = 'Enter the item ID.'; return; }
+    if (!wrapped || !priv) { $('#un-error').textContent = 'Fill in both the wrapped key and your private key.'; return; }
+
+    const btn = $('#un-submit');
+    btn.disabled = true; btn.textContent = 'Decrypting…';
+    try {
+      const form = new FormData();
+      form.append('wrapped_key', wrapped);
+      form.append('private_key', priv);
+      const res = await request(`/unlock-shared/${itemId}/${algo}`, { method: 'POST', form });
+      const filename = filenameFromResponse(res, `shared-item-${itemId}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = el('a', { href: url, download: filename });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Shared item decrypted and downloaded.');
+      $('#unlock-form').reset();
+    } catch (err) {
+      if (err.sessionExpired) { resetSession(err.message); return; }
+      $('#un-error').textContent = err.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Decrypt and download';
+    }
   });
 
   //Boot
