@@ -86,12 +86,13 @@ p { margin: 0; }
 /*form*/
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-weight: 600; font-size: .925rem; }
-input[type=text], input[type=password], input[type=tel], textarea {
+input[type=text], input[type=password], input[type=tel], input[type=number], select, textarea {
   width: 100%; font: inherit; color: var(--ink); background: #fff;
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; min-height: 44px;
   transition: border-color .15s;
 }
 textarea { resize: vertical; min-height: 88px; }
+.pem-box { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; }
 input::placeholder { color: #8c97b3; }
 input:hover, textarea:hover { border-color: #9fb0d6; }
 input:focus-visible, textarea:focus-visible { border-color: var(--blue); }
@@ -289,8 +290,3 @@ dialog .field { margin-top: 16px; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 10px; }
 }
-
-/*sharing key dialog*/
-.key-box { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; width: 100%; word-break: break-all; }
-#sk-fp { word-break: break-all; margin-top: 6px; }
-dialog .notice { margin-top: 16px; }
